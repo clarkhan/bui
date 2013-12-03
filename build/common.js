@@ -1,5 +1,5 @@
 
-define('bui/common',['bui/ua','bui/json','bui/date','bui/array','bui/keycode','bui/observable','bui/observable','bui/base','bui/component'],function(require){
+define('bui/common',['bui/ua','bui/json','bui/date','bui/array','bui/keycode','bui/observable','bui/base','bui/component'],function(require){
 
   var BUI = require('bui/util');
 
@@ -57,17 +57,17 @@ define('bui/util',function(){
     }
     
   }
-
+  //合并属性
   function mixAttr(attr,attrConfig){
     for (var p in attrConfig) {
       if(attrConfig.hasOwnProperty(p)){
         if(p == 'value'){
           if(BUI.isObject(attrConfig[p])){
             attr[p] = attr[p] || {};
-            BUI.mix(true,attr[p], attrConfig[p]); 
+            BUI.mix(/*true,*/attr[p], attrConfig[p]); 
           }else if(BUI.isArray(attrConfig[p])){
             attr[p] = attr[p] || [];
-            BUI.mix(true,attr[p], attrConfig[p]); 
+            BUI.mix(/*true,*/attr[p], attrConfig[p]); 
           }else{
             attr[p] = attrConfig[p];
           }
@@ -99,7 +99,7 @@ define('bui/util',function(){
      * 子版本号
      * @type {String}
      */
-    subVersion : 2,
+    subVersion : 57,
 
     /**
      * 是否为函数
@@ -313,6 +313,11 @@ define('bui/util',function(){
       }
       return window[name];
     },
+
+    mixAttrs : mixAttrs,
+
+    mixAttr : mixAttr,
+
     /**
      * 将其他类作为mixin集成到指定类上面
      * @param {Function} c 构造函数
@@ -348,7 +353,7 @@ define('bui/util',function(){
                             }else{
                                 BUI.mix(desc[K], ext[K]);
                             }
-                            //mixAttr(desc[k],ext[K]);
+                            
                         }
                     });
                 }
@@ -2298,6 +2303,20 @@ define('bui/base',['bui/observable'],function(require){
       return self;
   }
 
+  function initClassAttrs(c){
+    if(c._attrs || c == Base){
+      return;
+    }
+
+    var superCon = c.superclass.constructor;
+    if(superCon && !superCon._attrs){
+      initClassAttrs(superCon);
+    }
+    c._attrs =  {};
+    
+    BUI.mixAttrs(c._attrs,superCon._attrs);
+    BUI.mixAttrs(c._attrs,c.ATTRS);
+  }
   /**
    * 基础类，此类提供以下功能
    *  - 提供设置获取属性
@@ -2381,15 +2400,21 @@ define('bui/base',['bui/observable'],function(require){
         // define
         while (c) {
             constructors.push(c);
+            if(c.extensions){ //延迟执行mixin
+              BUI.mixin(c,c.extensions);
+              delete c.extensions;
+            }
             //_self.addAttrs(c['ATTRS']);
             c = c.superclass ? c.superclass.constructor : null;
         }
         //以当前对象的属性最终添加到属性中，覆盖之前的属性
-        for (var i = constructors.length - 1; i >= 0; i--) {
+        /*for (var i = constructors.length - 1; i >= 0; i--) {
           _self.addAttrs(constructors[i]['ATTRS'],true);
-        };
-        _self._initAttrs(config);
-
+        };*/
+      var con = _self.constructor;
+      initClassAttrs(con);
+      _self._initStaticAttrs(con._attrs);
+      _self._initAttrs(config);
   };
 
   Base.INVALID = INVALID;
@@ -2398,6 +2423,24 @@ define('bui/base',['bui/observable'],function(require){
 
   BUI.augment(Base,
   {
+    _initStaticAttrs : function(attrs){
+      var _self = this,
+        __attrs;
+
+      __attrs = _self.__attrs = {};
+      for (var p in attrs) {
+        if(attrs.hasOwnProperty(p)){
+          var attr = attrs[p];
+          /*if(BUI.isObject(attr.value) || BUI.isArray(attr.value) || attr.valueFn){*/
+          if(attr.shared === false || attr.valueFn){
+            __attrs[p] = {};
+            BUI.mixAttr(__attrs[p], attrs[p]); 
+          }else{
+            __attrs[p] = attrs[p];
+          }
+        }
+      };
+    },
     /**
      * 添加属性定义
      * @protected
@@ -2409,8 +2452,7 @@ define('bui/base',['bui/observable'],function(require){
             var _self = this,
                 attrs = _self.__attrs,
                 attr = attrs[name];
-                //;//$.clone(attrConfig);
-            /**/
+            
             if(!attr){
               attr = attrs[name] = {};
             }
@@ -2419,10 +2461,10 @@ define('bui/base',['bui/observable'],function(require){
                 if(p == 'value'){
                   if(BUI.isObject(attrConfig[p])){
                     attr[p] = attr[p] || {};
-                    BUI.mix(true,attr[p], attrConfig[p]); 
+                    BUI.mix(/*true,*/attr[p], attrConfig[p]); 
                   }else if(BUI.isArray(attrConfig[p])){
                     attr[p] = attr[p] || [];
-                    BUI.mix(true,attr[p], attrConfig[p]); 
+                    BUI.mix(/*true,*/attr[p], attrConfig[p]); 
                   }else{
                     attr[p] = attrConfig[p];
                   }
@@ -2432,11 +2474,6 @@ define('bui/base',['bui/observable'],function(require){
               }
 
             };
-            /*if (!attrs[name]) {
-                attrs[name] = BUI.cloneObject(attrConfig);
-            } else if(overrides){
-                BUI.mix(true,attrs[name], attrConfig);
-            }*/
             return _self;
     },
     /**
@@ -2657,6 +2694,7 @@ define('bui/base',['bui/observable'],function(require){
             
             // finally set
             _self.__attrVals[name] = value;
+      return _self;
     },
     //初始化属性
     _initAttrs : function(config){
@@ -3052,7 +3090,7 @@ define('bui/component/uibase/base',['bui/component/manage'],function(require){
      * @ignore
      */
     function bindUI(self) {
-        var attrs = self.getAttrs(),
+        /*var attrs = self.getAttrs(),
             attr,
             m;
 
@@ -3072,6 +3110,7 @@ define('bui/component/uibase/base',['bui/component/manage'],function(require){
                 }
             }
         }
+        */
     }
 
         /**
@@ -3120,8 +3159,8 @@ define('bui/component/uibase/base',['bui/component/manage'],function(require){
 
         var listener,
             n,
-            plugins = _self.get('plugins'),
-            listeners = _self.get('listeners');
+            plugins = _self.get('plugins')/*,
+            listeners = _self.get('listeners')*/;
 
         constructPlugins(plugins);
     
@@ -3198,7 +3237,7 @@ define('bui/component/uibase/base',['bui/component/manage'],function(require){
      * @readOnly
      */
     plugins : {
-      value : []
+      //value : []
     },
     /**
      * 是否已经渲染完成
@@ -3261,7 +3300,7 @@ define('bui/component/uibase/base',['bui/component/manage'],function(require){
             if (!_self.get('rendered')) {
                 var plugins = _self.get('plugins');
                 _self.create(undefined);
-
+                _self.set('created',true);
                 /**
                  * @event beforeRenderUI
                  * fired when root node is ready
@@ -3288,7 +3327,7 @@ define('bui/component/uibase/base',['bui/component/manage'],function(require){
                 _self.fire('beforeBindUI');
                 bindUI(_self);
                 callMethodByHierarchy(_self, 'bindUI', '__bindUI');
-
+                _self.set('binded',true);
                 /**
                  * @event afterBindUI
                  * fired when UIBase 's internal event is bind.
@@ -3372,6 +3411,24 @@ define('bui/component/uibase/base',['bui/component/manage'],function(require){
         return _self;
     } 
   });
+    
+  //延时处理构造函数
+  function initConstuctor(c){
+    var constructors = [];
+    while(c.base){
+        constructors.push(c);
+        c = c.base;
+    }
+    for(var i = constructors.length - 1; i >=0 ; i--){
+        var C = constructors[i];
+        //BUI.extend(C,C.base,C.px,C.sx);
+        BUI.mix(C.prototype,C.px);
+        BUI.mix(C,C.sx);
+        C.base = null;
+        C.px = null;
+        C.sx = null;
+    }
+  }
   
   BUI.mix(UIBase,
     {
@@ -3392,11 +3449,22 @@ define('bui/component/uibase/base',['bui/component/manage'],function(require){
           }
 
           function C() {
-              UIBase.apply(this, arguments);
+            var c = this.constructor;
+            if(c.base){
+                initConstuctor(c);
+            }
+            UIBase.apply(this, arguments);
           }
 
-          BUI.extend(C, base, px, sx);
-          BUI.mixin(C,extensions);
+          BUI.extend(C, base);  //无法延迟
+          C.base = base;
+          C.px = px;//延迟复制原型链上的函数
+          C.sx = sx;//延迟复制静态属性
+
+          //BUI.mixin(C,extensions);
+          if(extensions.length){ //延迟执行mixin
+            C.extensions = extensions;
+          }
          
           return C;
     },
@@ -3698,6 +3766,7 @@ define('bui/component/uibase/align',['bui/ua'],function (require) {
          * </code>
          */
         align:{
+            shared : false,
             value:{}
         }
     };
@@ -4004,9 +4073,7 @@ define('bui/component/uibase/autoshow',function () {
      * @ignore
      */
     triggerCallback : {
-      value : function (ev) {
-        
-      }
+      
     },
     /**
      * 显示菜单的事件
@@ -4096,13 +4163,6 @@ define('bui/component/uibase/autoshow',function () {
         }
         _self.set('align',align);
         _self.show();
-        /*if(_self.get('autoFocused')){
-          try{ //元素隐藏的时候，ie下经常会报错
-            _self.focus();
-          }catch(ev){
-            BUI.log(ev);
-          }
-        }*/
         
         
         triggerCallback && triggerCallback(ev);
@@ -4453,7 +4513,10 @@ define('bui/component/uibase/close',function () {
       },
       /**
        * 关闭时隐藏还是移除DOM结构<br/>
-       * default "hide". 可以设置 "destroy" ，当点击关闭按钮时移除（destroy)控件
+       * 
+       *  - "hide" : default 隐藏. 
+       *  - "destroy"：当点击关闭按钮时移除（destroy)控件
+       *  - 'remove' : 当存在父控件时使用remove，同时从父元素中删除
        * @cfg {String} [closeAction = 'hide']
        */
       /**
@@ -4470,14 +4533,21 @@ define('bui/component/uibase/close',function () {
        * @event closing
        * 正在关闭，可以通过return false 阻止关闭事件
        * @param {Object} e 关闭事件
-       * @param {String} e.action 关闭执行的行为，hide,destroy
+       * @param {String} e.action 关闭执行的行为，hide,destroy,remove
+       */
+      
+      /**
+       * @event beforeclosed
+       * 关闭前，发生在closing后，closed前，用于处理关闭前的一些工作
+       * @param {Object} e 关闭事件
+       * @param {String} e.action 关闭执行的行为，hide,destroy,remove
        */
 
       /**
        * @event closed
        * 已经关闭
        * @param {Object} e 关闭事件
-       * @param {String} e.action 关闭执行的行为，hide,destroy
+       * @param {String} e.action 关闭执行的行为，hide,destroy,remove
        */
       
       /**
@@ -4490,7 +4560,8 @@ define('bui/component/uibase/close',function () {
 
   var actions = {
       hide:HIDE,
-      destroy:'destroy'
+      destroy:'destroy',
+      remove : 'remove'
   };
 
   Close.prototype = {
@@ -4511,13 +4582,18 @@ define('bui/component/uibase/close',function () {
           btn && btn.detach();
       },
       /**
-       * 关闭弹出框，如果closeAction = 'hide'那么就是隐藏，如果 closeAction = 'destroy'那么就是释放
+       * 关闭弹出框，如果closeAction = 'hide'那么就是隐藏，如果 closeAction = 'destroy'那么就是释放,'remove'从父控件中删除，并释放
        */
       close : function(){
         var self = this,
           action = actions[self.get('closeAction') || HIDE];
         if(self.fire('closing',{action : action}) !== false){
-          self[action]();
+          self.fire('beforeclosed',{action : action});
+          if(action == 'remove'){ //移除时同时destroy
+            self[action](true);
+          }else{
+            self[action]();
+          }
           self.fire('closed',{action : action});
         }
       }
@@ -5044,6 +5120,7 @@ define('bui/component/uibase/mask',function (require) {
             if (!maskShared || maskDesc.num == 1) {
                 mask.show();
             }
+            $('body').addClass('x-masked-relative');
         },
 
         _maskExtHide:function () {
@@ -5060,6 +5137,7 @@ define('bui/component/uibase/mask',function (require) {
             } else if(mask){
                 mask.hide();
             }
+            $('body').removeClass('x-masked-relative');
         },
 
         __destructor:function () {
@@ -5990,7 +6068,8 @@ define('bui/component/uibase/decorate',['bui/array','bui/json','bui/component/ma
         dom = el[0],
         attributes = dom.attributes,
         decorateCfgFields = _self.get('decorateCfgFields'),
-        config = {};
+        config = {},
+        statusCfg = _self._getStautsCfg(el);
 
       BUI.each(attributes,function(attr){
         var name = attr.nodeName;
@@ -6007,7 +6086,20 @@ define('bui/component/uibase/decorate',['bui/array','bui/json','bui/component/ma
           BUI.log('parse field error,the attribute is:' + name);
         }
       });
-      return config;
+      return BUI.mix(config,statusCfg);
+    },
+    //根据css class获取状态属性
+    //如： selected,disabled等属性
+    _getStautsCfg : function(el){
+      var _self = this,
+        rst = {},
+        statusCls = _self.get('statusCls');
+      BUI.each(statusCls,function(v,k){
+        if(el.hasClass(v)){
+          rst[k] = true;
+        }
+      });
+      return rst;
     },
     /**
      * 获取封装成子控件的节点集合
@@ -6104,6 +6196,9 @@ define('bui/component/uibase/tpl',function () {
      */
     tpl:{
 
+    },
+    tplEl : {
+
     }
   };
 
@@ -6150,10 +6245,22 @@ define('bui/component/uibase/tpl',function () {
         var _self = this,
             el = _self.get('el'),
             content = _self.get('content'),
+            tplEl = _self.get('tplEl'),
             tpl = _self.getTpl(attrs);
-        if(!content && tpl){
+
+        //tplEl.remove();
+        if(!content && tpl){ //替换掉原先的内容
           el.empty();
           el.html(tpl);
+          /*if(tplEl){
+            var node = $(tpl).insertBefore(tplEl);
+            tplEl.remove();
+            tplEl = node;
+          }else{
+            tplEl = $(tpl).appendTo(el);
+          }
+          _self.set('tplEl',tplEl)
+          */
         }
     }
   }
@@ -6241,6 +6348,13 @@ define('bui/component/uibase/tpl',function () {
       if(!this.get('srcNode')){
         this.setTplContent();
       }
+    },
+    /**
+     * 控件信息发生改变时，控件内容跟模板相关时需要调用这个函数，
+     * 重新通过模板和控件信息构造内容
+     */
+    updateContent : function(){
+      this.setTplContent();
     },
     /**
      * 根据控件的属性和模板生成控件内容
@@ -6819,6 +6933,7 @@ define('bui/component/uibase/list',['bui/component/uibase/selection'],function (
      * @type {Array}
      */
     items:{
+      shared : false,
       view : true
     },
     /**
@@ -7216,6 +7331,13 @@ define('bui/component/uibase/list',['bui/component/uibase/selection'],function (
       value : true
     },
     /**
+     * 使用srcNode时，是否将内部的DOM转换成子控件
+     * @type {Boolean}
+     */
+    isDecorateChild : {
+      value : true
+    },
+    /**
      * 默认的加载控件内容的配置,默认值：
      * <pre>
      *  {
@@ -7483,7 +7605,7 @@ define('bui/component/uibase/childcfg',function (require) {
           var child = ev.child;
           if($.isPlainObject(child)){
             BUI.each(defaultChildCfg,function(v,k){
-              if(!child[k]){
+              if(child[k] == null){ //如果未在配置项中设置，则使用默认值
                 child[k] = v;
               }
             });
@@ -7605,7 +7727,7 @@ define('bui/component/uibase/depends',['bui/component/manage'],function (require
      * @type {Object}
      */
     depends : {
-      value : {}
+
     },
     /**
      * @private
@@ -7613,6 +7735,7 @@ define('bui/component/uibase/depends',['bui/component/manage'],function (require
      * @type {Object}
      */
     dependencesMap : {
+      shared : false,
       value : {}
     }
   };
@@ -8155,6 +8278,37 @@ define('bui/component/view',['bui/component/manage','bui/component/uibase'],func
             } else {
                 el.css('display', isVisible ? '' : 'none');
             }
+        },
+        set : function(name,value){
+             var _self = this,
+                attr = _self.__attrs[name],
+                ev,
+                ucName,
+                m;
+
+            if(!attr || !_self.get('binded')){ //未初始化view或者没用定义属性
+                View.superclass.set.call(this,name,value);
+                return _self;
+            }
+
+            var prevVal = View.superclass.get.call(this,name);
+
+            //如果未改变值不进行修改
+            if(!$.isPlainObject(value) && !BUI.isArray(value) && prevVal === value){
+                return _self;
+            }
+            View.superclass.set.call(this,name,value);
+
+            value = _self.__attrVals[name];
+            ev = {attrName: name,prevVal: prevVal,newVal: value};
+            ucName = BUI.ucfirst(name);
+            m = '_uiSet' + ucName;
+            if(_self[m]){
+                _self[m](value,ev);
+            }
+
+            return _self;
+
         },
         /**
          * 析构函数
@@ -8873,12 +9027,14 @@ define('bui/component/controller',['bui/component/uibase','bui/component/manage'
 
                     // setter 不应该有实际操作，仅用于正规化比较好
                     // attrCfg.setter = wrapperViewSetter(attrName);
-                    self.on('after' + BUI.ucfirst(attrName) + 'Change',
+                    // 不更改attrCfg的定义，可以多个实例公用一份attrCfg
+                    /*self.on('after' + BUI.ucfirst(attrName) + 'Change',
                         wrapperViewSetter(attrName));
+                    */
                     // 逻辑层读值直接从 view 层读
                     // 那么如果存在默认值也设置在 view 层
                     // 逻辑层不要设置 getter
-                    attrCfg.getter = wrapperViewGetter(attrName);
+                    //attrCfg.getter = wrapperViewGetter(attrName);
                 }
             }
         }
@@ -8981,7 +9137,9 @@ define('bui/component/controller',['bui/component/uibase','bui/component/manage'
             }
             Manager.addComponent(self.get('id'),self);
             // initialize view
-            self.setInternal('view', constructView(self));
+            var view = constructView(self);
+            self.setInternal('view', view);
+            self.__view = view;
         },
 
         /**
@@ -9733,6 +9891,71 @@ define('bui/component/controller',['bui/component/uibase','bui/component/manage'
             }
             self.get('view').destroy();
             Manager.removeComponent(id);
+        },
+        //覆写set方法
+        set : function(name,value,opt){
+            var _self = this,
+                view = _self.__view,
+                attr = _self.__attrs[name],
+                ucName,
+                ev,
+                m;
+            if(BUI.isObject(name)){
+                opt = value;
+                BUI.each(name,function(v,k){
+                    _self.set(k,v,opt);
+                });
+            }
+            if(!view || !attr || (opt && opt.silent)){ //未初始化view或者没用定义属性
+                Controller.superclass.set.call(this,name,value,opt);
+                return _self;
+            }
+
+            var prevVal = Controller.superclass.get.call(this,name);
+
+            //如果未改变值不进行修改
+            if(!$.isPlainObject(value) && !BUI.isArray(value) && prevVal === value){
+                return _self;
+            }
+            ucName = BUI.ucfirst(name);
+            m = '_uiSet' + ucName;
+            //触发before事件
+            _self.fire('before' + ucName + 'Change', {
+              attrName: name,
+              prevVal: prevVal,
+              newVal: value
+            });
+
+            _self.setInternal(name, value);
+
+            value = _self.__attrVals[name];
+            if(view && attr.view){
+                view.set(name,value);
+                //return _self;
+            }
+            ev = {attrName: name,prevVal: prevVal,newVal: value};
+
+            //触发before事件
+            _self.fire('after' + ucName + 'Change', ev);
+            if(_self.get('binded') && _self[m]){
+                _self[m](value,ev);
+            }
+            return _self;
+        },
+        //覆写get方法，改变时同时改变view的值
+        get : function(name){
+            var _self = this,
+                view = _self.__view,
+                attr = _self.__attrs[name],
+                value = Controller.superclass.get.call(this,name);
+            if(value !== undefined){
+                return value;
+            }
+            if(view && attr && attr.view){
+                return view.get(name);
+            }
+
+            return value;
         }
     },
     {
@@ -10251,7 +10474,8 @@ define('bui/component/controller',['bui/component/uibase','bui/component/manage'
              */
             children: {
                 sync : false,
-                value: []
+                shared : false,
+                value: []/**/
             },
             /**
              * 控件的CSS前缀

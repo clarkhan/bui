@@ -41,17 +41,17 @@ define('bui/util',function(){
     }
     
   }
-
+  //合并属性
   function mixAttr(attr,attrConfig){
     for (var p in attrConfig) {
       if(attrConfig.hasOwnProperty(p)){
         if(p == 'value'){
           if(BUI.isObject(attrConfig[p])){
             attr[p] = attr[p] || {};
-            BUI.mix(true,attr[p], attrConfig[p]); 
+            BUI.mix(/*true,*/attr[p], attrConfig[p]); 
           }else if(BUI.isArray(attrConfig[p])){
             attr[p] = attr[p] || [];
-            BUI.mix(true,attr[p], attrConfig[p]); 
+            BUI.mix(/*true,*/attr[p], attrConfig[p]); 
           }else{
             attr[p] = attrConfig[p];
           }
@@ -83,7 +83,7 @@ define('bui/util',function(){
      * 子版本号
      * @type {String}
      */
-    subVersion : 2,
+    subVersion : 57,
 
     /**
      * 是否为函数
@@ -297,6 +297,11 @@ define('bui/util',function(){
       }
       return window[name];
     },
+
+    mixAttrs : mixAttrs,
+
+    mixAttr : mixAttr,
+
     /**
      * 将其他类作为mixin集成到指定类上面
      * @param {Function} c 构造函数
@@ -332,7 +337,7 @@ define('bui/util',function(){
                             }else{
                                 BUI.mix(desc[K], ext[K]);
                             }
-                            //mixAttr(desc[k],ext[K]);
+                            
                         }
                     });
                 }
